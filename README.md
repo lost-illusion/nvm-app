@@ -25,8 +25,12 @@ version, hide-not-remove a watch.
 ## Install
 
 Grab `nvm-app-<version>.dmg` from the [latest release](../../releases/latest), open it,
-drag **nvm-app** to **Applications**. The build is unsigned — first launch: right-click →
-Open → Open. Requires an nvm-sh install (`~/.nvm/nvm.sh`).
+drag **nvm-app** to **Applications**. Needs **Apple Silicon, macOS 26+**, and an nvm-sh
+install (`~/.nvm/nvm.sh`).
+
+The build is ad-hoc signed and unnotarized, so Gatekeeper objects on first launch:
+right-click → Open → Open; if still blocked, System Settings → Privacy & Security →
+**Open Anyway**. (Real notarization needs a paid Developer ID — future work.)
 
 ## Build from source
 

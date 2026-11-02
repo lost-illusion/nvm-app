@@ -11,7 +11,11 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - run: swift --version
+      - name: Show toolchain (macos-latest SDK/Xcode drifts over time)
+        run: |
+          swift --version
+          xcodebuild -version
+          xcrun --show-sdk-version
       - run: swift build
       - run: swift test
 
@@ -23,8 +27,17 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+      - name: Show toolchain
+        run: |
+          swift --version
+          xcodebuild -version
+          xcrun --show-sdk-version
       - name: Build DMG
         run: NVM_APP_VERSION="${GITHUB_REF_NAME#v}" sh Tools/make-dmg.sh
+      - name: Verify packaged app and image
+        run: |
+          codesign --verify --deep --strict build/NVMApp.app
+          hdiutil verify build/nvm-app-*.dmg
       - name: Attach DMG to the release
         uses: softprops/action-gh-release@v2
         with:
