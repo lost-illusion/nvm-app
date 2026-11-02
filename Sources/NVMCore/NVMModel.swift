@@ -302,6 +302,77 @@ public final class NVMModel {
         defaults.set(hiddenFolders.map(\.path), forKey: "hiddenProjectFolders")
     }
 
+    // MARK: - terminal auto-use hook (~/.zshrc chpwd)
+
+    public private(set) var hookStatus: AutoUseHook.Status = .absent
+    public private(set) var hookBusy: BusyAction = .idle
+    /// Whether ~/.zshrc sources nvm.sh — the hook calls nvm functions, so
+    /// without this it would error on every `cd`.
+    public private(set) var hasNvmInZshrc = false
+
+    public var zshrcURL: URL {
+        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".zshrc")
+    }
+    private var zshrcBackupURL: URL {
+        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".zshrc.bak-nvm-app")
+    }
+
+    public func refreshHookStatus() {
+        let text = (try? String(contentsOf: zshrcURL, encoding: .utf8)) ?? ""
+        hasNvmInZshrc = text.contains("nvm.sh")
+        hookStatus = AutoUseHook.status(in: text)
+    }
+
+    public func installHook(autoInstall: Bool) {
+        hookBusy = .busy("Updating ~/.zshrc…")
+        let text = (try? String(contentsOf: zshrcURL, encoding: .utf8)) ?? ""
+        var base = text
+        switch AutoUseHook.status(in: base) {
+        case .installed:
+            hookBusy = .idle
+            refreshHookStatus()
+            return
+        case .foreign:
+            hookBusy = .failed("~/.zshrc already has its own chpwd hook — leaving it alone")
+            return
+        case .corrupted:
+            // Strip the orphan block first, then write a fresh one.
+            base = AutoUseHook.remove(from: base)
+        case .absent:
+            break
+        }
+        backupZshrcOnce()
+        let updated = AutoUseHook.install(into: base, autoInstall: autoInstall)
+        try? updated.write(to: zshrcURL, atomically: true, encoding: .utf8)
+        hookBusy = .idle
+        refreshHookStatus()
+    }
+
+    public func removeHook() {
+        guard hookStatus == .installed || hookStatus == .corrupted else { return }
+        hookBusy = .busy("Updating ~/.zshrc…")
+        let text = (try? String(contentsOf: zshrcURL, encoding: .utf8)) ?? ""
+        backupZshrcOnce()
+        let updated = AutoUseHook.remove(from: text)
+        try? updated.write(to: zshrcURL, atomically: true, encoding: .utf8)
+        hookBusy = .idle
+        refreshHookStatus()
+    }
+
+    /// Re-write our block after the auto-install toggle changes.
+    public func reinstallHook(autoInstall: Bool) {
+        guard hookStatus == .installed else { return }
+        removeHook()
+        installHook(autoInstall: autoInstall)
+    }
+
+    private func backupZshrcOnce() {
+        let fm = FileManager.default
+        guard !fm.fileExists(atPath: zshrcBackupURL.path),
+              fm.fileExists(atPath: zshrcURL.path) else { return }
+        try? fm.copyItem(at: zshrcURL, to: zshrcBackupURL)
+    }
+
     public func distMeta(for version: NodeVersion) -> DistEntry? {
         distEntries[NodeVersion.normalize(version.raw)]
     }

@@ -20,6 +20,7 @@ struct NVMAppRoot: App {
                     // "Update versions" runs at launch: disk state first, then the
                     // remote catalog and the cached dist metadata in parallel.
                     Task {
+                        model.refreshHookStatus()
                         await model.refresh()
                         if model.status == .ready {
                             await withTaskGroup(of: Void.self) { group in
