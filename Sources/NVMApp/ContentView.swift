@@ -27,9 +27,23 @@ struct ContentView: View {
                 SetupView()
             case .ready:
                 NavigationSplitView {
-                    List(Pane.allCases, selection: $pane) { pane in
-                        Label(pane.rawValue, systemImage: pane == .installed ? "checkmark.circle" : "cloud")
+                    // Plain buttons instead of List(selection:): the data-based
+                    // selection API proved unreliable here; explicit buttons always fire.
+                    List {
+                        ForEach(Pane.allCases) { item in
+                            Button { pane = item } label: {
+                                Label(item.rawValue,
+                                      systemImage: item == .installed ? "checkmark.circle" : "cloud")
+                                    .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .listRowBackground(pane == item
+                                ? Color.accentColor.opacity(0.18)
+                                : Color.clear)
+                        }
                     }
+                    .listStyle(.sidebar)
                     .navigationSplitViewColumnWidth(min: 150, ideal: 170)
                 } detail: {
                     detail
