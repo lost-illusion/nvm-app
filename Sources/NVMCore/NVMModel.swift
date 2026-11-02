@@ -21,6 +21,8 @@ public final class NVMModel {
     public private(set) var status: NVMStatus = .checking
     public private(set) var nvmVersionLabel: String?
     public private(set) var installed: [NodeVersion] = []
+    /// Normalized raws of installed versions, for cheap catalog-row lookups.
+    public private(set) var installedNormalized: Set<String> = []
     public private(set) var aliasPairs: [(name: String, target: String)] = []
     /// `nvm version default` output: a resolved `vX.Y.Z` or `N/A`.
     public private(set) var resolvedDefault: String?
@@ -33,12 +35,31 @@ public final class NVMModel {
 
     public private(set) var actionBusy: BusyAction = .idle
 
+    /// nodejs.org dist/index.json metadata, keyed by normalized version ("22.22.1").
+    public private(set) var distEntries: [String: DistEntry] = [:]
+    public private(set) var distFetchedAt: Date?
+    public private(set) var distBusy: BusyAction = .idle
+
+    /// Disk extras for installed versions, keyed like distEntries.
+    public private(set) var extras: [String: NVMLayout.InstallExtras] = [:]
+
+    /// Versions released after the app launched get a "new" badge.
+    public let launchedAt = Date()
+
+    /// Refresh the dist cache when it is older than this (background, non-blocking).
+    public static let maxCacheAge: TimeInterval = 24 * 3600
+
     public let layout: NVMLayout
     private let runner: NVMShellRunner
+    private let distStore: DistIndexStore
 
-    public init(layout: NVMLayout) {
+    public init(layout: NVMLayout,
+                cacheDirectory: URL = FileManager.default
+                    .urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+                    .appendingPathComponent("nvm-app", isDirectory: true)) {
         self.layout = layout
         self.runner = NVMShellRunner(layout: layout)
+        self.distStore = DistIndexStore(directory: cacheDirectory)
     }
 
     public func refresh() async {
@@ -53,6 +74,7 @@ public final class NVMModel {
         }
         nvmVersionLabel = versionResult.output.trimmingCharacters(in: .whitespacesAndNewlines)
         installed = layout.installedVersions()
+        installedNormalized = Set(installed.map { NodeVersion.normalize($0.raw) })
         aliasPairs = layout.aliasPairs()
         let defaultResult = await runner.run(["version", "default"])
         resolvedDefault = defaultResult.output.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -69,6 +91,77 @@ public final class NVMModel {
         } else {
             remoteBusy = .failed("ls-remote failed (exit \(result.status)): network or mirror problem")
         }
+    }
+
+    /// Launch path: render instantly from the on-disk cache, then re-fetch in the
+    /// background only when the cache is missing or older than maxCacheAge.
+    public func prepareDistAtLaunch() async {
+        let store = distStore
+        let snapshot = await Task.detached(priority: .userInitiated) { store.load() }.value
+        if let snapshot {
+            distEntries = Self.index(snapshot.entries)
+            distFetchedAt = snapshot.fetchedAt
+            if Date().timeIntervalSince(snapshot.fetchedAt) > Self.maxCacheAge {
+                await refreshDist()
+            }
+        } else {
+            await refreshDist()
+        }
+    }
+
+    /// Background download of nodejs.org/dist/index.json (gzip-requested).
+    /// Fetch + JSON decode + cache write all run off the main actor.
+    public func refreshDist() async {
+        distBusy = .busy("Downloading version metadata…")
+        let store = distStore
+        let outcome: Result<[DistEntry], any Error> = await Task.detached(priority: .userInitiated) {
+            do {
+                let entries = try await DistFetcher.fetch()
+                store.save(entries, fetchedAt: Date())
+                return .success(entries)
+            } catch {
+                return .failure(error)
+            }
+        }.value
+        switch outcome {
+        case .success(let entries):
+            distEntries = Self.index(entries)
+            distFetchedAt = Date()
+            distBusy = .idle
+        case .failure:
+            // Cache (if any) stays usable; say so rather than blanking the table.
+            distBusy = .failed(distEntries.isEmpty
+                ? "Could not download version metadata (offline?)"
+                : "Metadata refresh failed — showing cached data")
+        }
+    }
+
+    public func refreshExtras() async {
+        let layout = self.layout
+        extras = await Task.detached(priority: .userInitiated) { layout.computeExtras() }.value
+    }
+
+    public func distMeta(for version: NodeVersion) -> DistEntry? {
+        distEntries[NodeVersion.normalize(version.raw)]
+    }
+
+    public func extras(for version: NodeVersion) -> NVMLayout.InstallExtras? {
+        extras[NodeVersion.normalize(version.raw)]
+    }
+
+    /// LTS codename for a row: per-patch metadata wins over ls-remote's
+    /// latest-patch-only marker.
+    public func ltsCodename(for entry: RemoteVersion) -> String? {
+        distMeta(for: entry.version)?.ltsCodename ?? entry.ltsCodename
+    }
+
+    public func isNewSinceLaunch(_ version: NodeVersion) -> Bool {
+        guard let date = distMeta(for: version)?.releaseDate else { return false }
+        return date > launchedAt
+    }
+
+    private static func index(_ entries: [DistEntry]) -> [String: DistEntry] {
+        Dictionary(entries.map { (NodeVersion.normalize($0.version), $0) }, uniquingKeysWith: { first, _ in first })
     }
 
     public func install(raw: String, offline: Bool = false, migrateFrom: String? = nil) async {
@@ -112,6 +205,14 @@ public final class NVMModel {
             actionBusy = .failed("\(label.components(separatedBy: "…")[0]) failed "
                 + "(exit \(result.status)): \(result.output.trimmingCharacters(in: .whitespacesAndNewlines))")
         }
+    }
+
+    public func isInstalled(_ version: NodeVersion) -> Bool {
+        installedNormalized.contains(NodeVersion.normalize(version.raw))
+    }
+
+    public func isDefault(_ version: NodeVersion) -> Bool {
+        NodeVersion.normalize(version.raw) == NodeVersion.normalize(resolvedDefault ?? "")
     }
 
     /// Copy-pasteable command the user can run in their own terminal to switch

@@ -28,6 +28,7 @@ public enum RemoteCatalogParser {
     private static let latestPattern = try! NSRegularExpression(pattern: "\\(Latest: ([^)]+)\\)")
     private static let aliasesPattern = try! NSRegularExpression(pattern: "\\(Aliases: ([^)]+)\\)")
 
+    /// Rows returned newest → oldest (ls-remote itself lists oldest first).
     public static func parse(_ text: String) -> [RemoteVersion] {
         text.split(whereSeparator: \.isNewline).compactMap { rawLine in
             let line = String(rawLine)
@@ -45,6 +46,7 @@ public enum RemoteCatalogParser {
             return RemoteVersion(version: version, isLatestCurrent: isLatest,
                                  ltsCodename: lts, aliasedBy: aliases)
         }
+        .sorted { $0.version > $1.version }
     }
 
     private static func firstCapture(_ pattern: NSRegularExpression, in line: String, group: Int) -> String? {

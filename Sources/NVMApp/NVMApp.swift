@@ -15,7 +15,18 @@ struct NVMAppRoot: App {
                 .onAppear {
                     // SwiftPM executables can start without frontmost focus.
                     if !NSApp.isActive { NSApp.activate(ignoringOtherApps: true) }
-                    Task { await model.refresh() }
+                    // "Update versions" runs at launch: disk state first, then the
+                    // remote catalog and the cached dist metadata in parallel.
+                    Task {
+                        await model.refresh()
+                        if model.status == .ready {
+                            await withTaskGroup(of: Void.self) { group in
+                                group.addTask { await model.loadRemote() }
+                                group.addTask { await model.prepareDistAtLaunch() }
+                            }
+                            await model.refreshExtras()
+                        }
+                    }
                 }
         }
         .commands {

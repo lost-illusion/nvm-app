@@ -1,9 +1,16 @@
 import NVMCore
 import SwiftUI
 
-enum Pane: String, CaseIterable, Identifiable {
+enum VersionFilter: String, CaseIterable, Identifiable {
+    case all = "All"
+    case lts = "LTS"
     case installed = "Installed"
-    case available = "Available"
+    var id: String { rawValue }
+}
+
+enum TableStyle: String, CaseIterable, Identifiable {
+    case full = "Full"
+    case compact = "Compact"
     var id: String { rawValue }
 }
 
@@ -14,8 +21,10 @@ struct InstallTarget: Identifiable, Hashable {
 
 struct ContentView: View {
     @Environment(NVMModel.self) private var model
-    @State private var pane: Pane = .installed
+    @State private var filter: VersionFilter = .all
+    @State private var tableStyle: TableStyle = .full
     @State private var installingTarget: InstallTarget?
+    @State private var pendingUninstall: String?
 
     var body: some View {
         Group {
@@ -26,49 +35,73 @@ struct ContentView: View {
             case .notInstalled:
                 SetupView()
             case .ready:
-                NavigationSplitView {
-                    // Plain buttons instead of List(selection:): the data-based
-                    // selection API proved unreliable here; explicit buttons always fire.
-                    List {
-                        ForEach(Pane.allCases) { item in
-                            Button { pane = item } label: {
-                                Label(item.rawValue,
-                                      systemImage: item == .installed ? "checkmark.circle" : "cloud")
-                                    .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
-                                    .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .listRowBackground(pane == item
-                                ? Color.accentColor.opacity(0.18)
-                                : Color.clear)
-                        }
-                    }
-                    .listStyle(.sidebar)
-                    .navigationSplitViewColumnWidth(min: 150, ideal: 170)
-                } detail: {
-                    detail
-                        .toolbar {
-                            ToolbarItem {
-                                Button { Task { await model.refresh() } } label: {
-                                    Label("Refresh", systemImage: "arrow.clockwise")
-                                }
-                            }
-                        }
-                }
+                home
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { statusBar }
         .sheet(item: $installingTarget) { target in
             InstallSheet(model: model, version: target.raw, installed: model.installed.map(\.raw))
         }
+        .confirmationDialog(
+            "Uninstall \(pendingUninstall ?? "")? Its global npm packages go with it.",
+            isPresented: .init(
+                get: { pendingUninstall != nil },
+                set: { if !$0 { pendingUninstall = nil } }),
+            titleVisibility: .visible)
+        {
+            Button("Uninstall", role: .destructive) {
+                if let raw = pendingUninstall {
+                    Task { await model.uninstall(raw) }
+                }
+                pendingUninstall = nil
+            }
+        }
     }
 
-    @ViewBuilder
-    private var detail: some View {
-        switch pane {
-        case .installed: InstalledList(onInstall: { installingTarget = InstallTarget(raw: $0) })
-        case .available: AvailableList(onInstall: { installingTarget = InstallTarget(raw: $0) })
+    private var home: some View {
+        VStack(spacing: 0) {
+            BannerCard(model: model)
+            controls
+            Divider()
+            VersionTable(model: model, filter: filter, style: tableStyle,
+                         onInstallWithOptions: { installingTarget = InstallTarget(raw: $0) },
+                         onUninstall: { pendingUninstall = $0 })
         }
+    }
+
+    private var controls: some View {
+        HStack(spacing: 12) {
+            Picker("Filter", selection: $filter) {
+                ForEach(VersionFilter.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 220)
+            .labelsHidden()
+
+            Picker("Table style", selection: $tableStyle) {
+                ForEach(TableStyle.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 170)
+            .labelsHidden()
+
+            Spacer()
+
+            Button {
+                Task {
+                    await withTaskGroup(of: Void.self) { group in
+                        group.addTask { await model.loadRemote() }
+                        group.addTask { await model.refreshDist() }
+                    }
+                    await model.refreshExtras()
+                }
+            } label: {
+                Label("Update versions", systemImage: "arrow.clockwise")
+            }
+            .disabled(model.remoteBusy != .idle || model.distBusy != .idle)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
     }
 
     @ViewBuilder
@@ -84,9 +117,12 @@ struct ContentView: View {
             HStack {
                 Text("nvm \(model.nvmVersionLabel ?? "—")")
                 Text("·").foregroundStyle(.secondary)
-                Text("default: \(model.resolvedDefault ?? "none")")
-                Spacer()
                 Text(model.layout.nvmDir.path).font(.caption).foregroundStyle(.secondary)
+                if let fetchedAt = model.distFetchedAt {
+                    Text("·").foregroundStyle(.secondary)
+                    Text("metadata \(fetchedAt.formatted(.dateTime.month(.abbreviated).day().hour().minute()))")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
             .font(.callout)
             .padding(.horizontal, 12)

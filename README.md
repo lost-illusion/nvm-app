@@ -39,10 +39,17 @@ shell's PATH. The real levers this app provides:
 
 ## Layout
 
-- `Sources/NVMCore` — `NVMLayout` (disk state), `NVMShellRunner` (zsh bridge),
-  `RemoteCatalogParser` (`ls-remote` parsing), `NodeVersion`, `NVMModel` (observable state)
-- `Sources/NVMApp` — SwiftUI: sidebar (Installed / Available), install sheet, setup view
-- `Tests/NVMCoreTests` — swift-testing suites for version parsing + catalog parsing
+- `Sources/NVMCore` — `NVMLayout` (disk state + installed extras: globals, size, install date),
+  `NVMShellRunner` (zsh bridge), `RemoteCatalogParser` (`ls-remote` parsing),
+  `DistMetadata` (nodejs.org `index.json` fetch + gzip inflate + on-disk cache),
+  `NodeVersion`, `NVMModel` (observable state)
+- `Sources/NVMApp` — SwiftUI: Home (banner + filters + Full/Compact table), install sheet, setup view
+- `Tests/NVMCoreTests` — swift-testing suites for parsing, tree grouping, dist decoding + cache
+
+Catalog metadata is cached at `~/Library/Application Support/nvm-app/dist-index.json`:
+launch renders from cache instantly, refreshes in background when older than 24 h,
+and the table still works offline with cached data. Download requests gzip
+(~600 KB vs ~5 MB raw) and inflates via zlib.
 
 ## Roadmap
 

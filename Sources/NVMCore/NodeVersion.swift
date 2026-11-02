@@ -11,6 +11,13 @@ public struct NodeVersion: Sendable, Identifiable, Hashable {
 
     public var id: String { raw }
 
+    /// `v22.20.0` / `22.20.0` compared as one thing.
+    public static func normalize(_ raw: String) -> String {
+        var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if s.hasPrefix("v") || s.hasPrefix("V") { s.removeFirst() }
+        return s
+    }
+
     public static func parse(_ text: String) -> NodeVersion? {
         var s = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if s.hasPrefix("v") || s.hasPrefix("V") { s.removeFirst() }

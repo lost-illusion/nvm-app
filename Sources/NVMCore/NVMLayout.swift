@@ -45,6 +45,41 @@ public struct NVMLayout: Sendable {
         return pairs.sorted { $0.name < $1.name }
     }
 
+    /// Disk-side facts about an installed version, for table extras.
+    public struct InstallExtras: Sendable, Equatable {
+        public let globals: Int
+        public let sizeBytes: Int64
+        public let installedAt: Date?
+    }
+
+    /// Walks every installed version's directory (size + mtime + global npm
+    /// packages). Heavier than the other reads — call from a background task.
+    public func computeExtras(fileManager: FileManager = .default) -> [String: InstallExtras] {
+        var result: [String: InstallExtras] = [:]
+        for version in installedVersions(fileManager: fileManager) {
+            let dir = versionsDir.appendingPathComponent(version.raw, isDirectory: true)
+            let attrs = try? fileManager.attributesOfItem(atPath: dir.path)
+            let installedAt = attrs?[.creationDate] as? Date
+
+            var size: Int64 = 0
+            if let enumerator = fileManager.enumerator(
+                at: dir, includingPropertiesForKeys: [.totalFileAllocatedSizeKey, .fileSizeKey]) {
+                for case let fileURL as URL in enumerator {
+                    let values = try? fileURL.resourceValues(forKeys: [.totalFileAllocatedSizeKey, .fileSizeKey])
+                    size += Int64(values?.totalFileAllocatedSize ?? values?.fileSize ?? 0)
+                }
+            }
+
+            let modulesDir = dir.appendingPathComponent("lib/node_modules", isDirectory: true)
+            let topLevel = (try? fileManager.contentsOfDirectory(atPath: modulesDir.path)) ?? []
+            let globals = topLevel.filter { $0 != "npm" && $0 != "corepack" }.count
+
+            result[NodeVersion.normalize(version.raw)] = InstallExtras(
+                globals: globals, sizeBytes: size, installedAt: installedAt)
+        }
+        return result
+    }
+
     private func collectAliases(in dir: URL, prefix: String, fileManager: FileManager,
                                 into pairs: inout [(name: String, target: String)]) {
         guard let children = try? fileManager.contentsOfDirectory(atPath: dir.path) else { return }
