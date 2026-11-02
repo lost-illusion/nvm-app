@@ -1,0 +1,28 @@
+import AppKit
+import NVMCore
+import SwiftUI
+
+@main
+struct NVMAppRoot: App {
+    @State private var model = NVMModel(layout: NVMLayout.detect(
+        override: UserDefaults.standard.string(forKey: "nvmDirOverride")))
+
+    var body: some Scene {
+        WindowGroup("Node Versions") {
+            ContentView()
+                .environment(model)
+                .frame(minWidth: 720, minHeight: 480)
+                .onAppear {
+                    // SwiftPM executables can start without frontmost focus.
+                    if !NSApp.isActive { NSApp.activate(ignoringOtherApps: true) }
+                    Task { await model.refresh() }
+                }
+        }
+        .commands {
+            CommandGroup(after: .newItem) {
+                Button("Refresh") { Task { await model.refresh() } }
+                    .keyboardShortcut("r")
+            }
+        }
+    }
+}
