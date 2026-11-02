@@ -194,6 +194,20 @@ struct VersionTable: View {
         }
         .contextMenu {
             Button("Install with options…") { onInstallWithOptions(entry.version.raw) }
+            if model.projectFolders.count == 1 {
+                let folder = model.projectFolders[0]
+                Button("Pin \(entry.version.raw) in \(folder.lastPathComponent)/.nvmrc") {
+                    Task { await model.writePin(entry.version.raw, for: folder) }
+                }
+            } else if !model.projectFolders.isEmpty {
+                Menu("Pin \(entry.version.raw) in .nvmrc") {
+                    ForEach(model.projectFolders, id: \.path) { folder in
+                        Button(folder.lastPathComponent) {
+                            Task { await model.writePin(entry.version.raw, for: folder) }
+                        }
+                    }
+                }
+            }
         }
     }
 

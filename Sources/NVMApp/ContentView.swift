@@ -19,12 +19,18 @@ struct InstallTarget: Identifiable, Hashable {
     var id: String { raw }
 }
 
+struct FolderTarget: Identifiable, Hashable {
+    let url: URL
+    var id: String { url.path }
+}
+
 struct ContentView: View {
     @Environment(NVMModel.self) private var model
     @State private var filter: VersionFilter = .all
     @State private var tableStyle: TableStyle = .full
     @State private var installingTarget: InstallTarget?
     @State private var pendingUninstall: String?
+    @State private var pinTarget: FolderTarget?
 
     var body: some View {
         Group {
@@ -41,6 +47,9 @@ struct ContentView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) { statusBar }
         .sheet(item: $installingTarget) { target in
             InstallSheet(model: model, version: target.raw, installed: model.installed.map(\.raw))
+        }
+        .sheet(item: $pinTarget) { target in
+            PinEditor(model: model, folder: target.url)
         }
         .confirmationDialog(
             "Uninstall \(pendingUninstall ?? "")? Its global npm packages go with it.",
@@ -61,6 +70,7 @@ struct ContentView: View {
     private var home: some View {
         VStack(spacing: 0) {
             BannerCard(model: model)
+            PinCard(model: model, onEdit: { pinTarget = FolderTarget(url: $0) })
             controls
             Divider()
             VersionTable(model: model, filter: filter, style: tableStyle,

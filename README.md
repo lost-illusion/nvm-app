@@ -53,7 +53,9 @@ and the table still works offline with cached data. Download requests gzip
 
 ## Roadmap
 
-1. `.nvmrc` awareness: show the pin for a chosen project folder, write/edit it
+1. ~~`.nvmrc` awareness~~ — done: PinCard under the banner (choose folder, see the
+   pin → `nvm version` / `version-remote` resolution, install/set-default, edit
+   or remove the file; right-click any table row to pin it)
 2. Shell integration helper: install the zsh `chpwd` auto-use hook (README recipe in nvm)
 3. "Run in Terminal with this version" button (PATH-prefixed launch)
 4. Health checks: `~/.npmrc prefix=` incompatibility, `~/.nvm` ownership, Homebrew-nvm warning

@@ -43,6 +43,19 @@ public final class NVMModel {
     /// Disk extras for installed versions, keyed like distEntries.
     public private(set) var extras: [String: NVMLayout.InstallExtras] = [:]
 
+    /// Project `.nvmrc` awareness: watched folders (plus a hidden list — hiding
+    /// only removes the watch, never touches the real `.nvmrc`), each with the
+    /// folder's raw spec and the concrete version nvm maps it to.
+    public struct PinState: Sendable, Equatable {
+        public var spec: String?
+        public var resolved: String?
+        public var busy: BusyAction = .idle
+    }
+
+    public private(set) var projectFolders: [URL] = []
+    public private(set) var hiddenFolders: [URL] = []
+    public private(set) var pinStates: [String: PinState] = [:]  // keyed by folder path
+
     /// Versions released after the app launched get a "new" badge.
     public let launchedAt = Date()
 
@@ -60,6 +73,20 @@ public final class NVMModel {
         self.layout = layout
         self.runner = NVMShellRunner(layout: layout)
         self.distStore = DistIndexStore(directory: cacheDirectory)
+        let defaults = UserDefaults.standard
+        func urls(forKey key: String) -> [URL] {
+            (defaults.stringArray(forKey: key) ?? [])
+                .map { URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath) }
+        }
+        var visible = urls(forKey: "projectFolders")
+        // Migrate the single-folder key from the first .nvmrc iteration.
+        if let legacy = defaults.string(forKey: "projectFolder") {
+            let legacyURL = URL(fileURLWithPath: (legacy as NSString).expandingTildeInPath)
+            if !visible.contains(where: { $0.path == legacyURL.path }) { visible.append(legacyURL) }
+            defaults.removeObject(forKey: "projectFolder")
+        }
+        self.projectFolders = visible
+        self.hiddenFolders = urls(forKey: "hiddenProjectFolders")
     }
 
     public func refresh() async {
@@ -139,6 +166,110 @@ public final class NVMModel {
     public func refreshExtras() async {
         let layout = self.layout
         extras = await Task.detached(priority: .userInitiated) { layout.computeExtras() }.value
+    }
+
+    public func pinState(for folder: URL) -> PinState {
+        pinStates[folder.path] ?? PinState()
+    }
+
+    public func watchFolder(_ url: URL) async {
+        hiddenFolders.removeAll { $0.path == url.path }
+        if !projectFolders.contains(where: { $0.path == url.path }) {
+            projectFolders.append(url)
+        }
+        persistFolders()
+        await refreshPin(for: url)
+    }
+
+    public func showHiddenFolder(_ url: URL) async {
+        hiddenFolders.removeAll { $0.path == url.path }
+        if !projectFolders.contains(where: { $0.path == url.path }) {
+            projectFolders.append(url)
+        }
+        persistFolders()
+        await refreshPin(for: url)
+    }
+
+    /// Watch-only hide: the folder's `.nvmrc` file is left untouched, and the
+    /// folder returns via the Hidden menu.
+    public func hideFolder(_ url: URL) {
+        projectFolders.removeAll { $0.path == url.path }
+        if !hiddenFolders.contains(where: { $0.path == url.path }) {
+            hiddenFolders.append(url)
+        }
+        pinStates.removeValue(forKey: url.path)
+        persistFolders()
+    }
+
+    public func refreshAllPins() async {
+        await withTaskGroup(of: Void.self) { group in
+            for folder in projectFolders {
+                group.addTask { await self.refreshPin(for: folder) }
+            }
+        }
+    }
+
+    /// Read `<folder>/.nvmrc` and ask nvm what it resolves to.
+    public func refreshPin(for folder: URL) async {
+        var state = pinState(for: folder)
+        state.spec = Nvmrc.read(in: folder)
+        guard let spec = state.spec else {
+            state.resolved = nil
+            state.busy = .idle
+            pinStates[folder.path] = state
+            return
+        }
+        state.busy = .busy("Resolving…")
+        pinStates[folder.path] = state
+
+        // `nvm version` resolves locally (alias or installed version); N/A means
+        // nothing local matches, so ask the remote catalog via `version-remote`.
+        let local = await runner.run(["version", spec])
+        let localOut = local.output.trimmingCharacters(in: .whitespacesAndNewlines)
+        if local.isSuccess, !localOut.isEmpty, localOut != "N/A" {
+            state.resolved = localOut
+            state.busy = .idle
+            pinStates[folder.path] = state
+            return
+        }
+        let remote = await runner.run(["version-remote", spec])
+        let remoteOut = remote.output.trimmingCharacters(in: .whitespacesAndNewlines)
+        if remote.isSuccess, !remoteOut.isEmpty, remoteOut != "N/A" {
+            state.resolved = remoteOut
+            state.busy = .idle
+        } else {
+            state.resolved = nil
+            state.busy = .failed("nvm can’t resolve “\(spec)”")
+        }
+        pinStates[folder.path] = state
+    }
+
+    public func writePin(_ spec: String, for folder: URL) async {
+        Nvmrc.write(spec, in: folder)
+        await refreshPin(for: folder)
+    }
+
+    public func clearPin(for folder: URL) {
+        Nvmrc.remove(from: folder)
+        var state = pinState(for: folder)
+        state.spec = nil
+        state.resolved = nil
+        state.busy = .idle
+        pinStates[folder.path] = state
+    }
+
+    public func pinInstalled(_ resolved: String?) -> Bool {
+        NodeVersion.parse(resolved ?? "").map(isInstalled) ?? false
+    }
+
+    public func pinIsDefault(_ resolved: String?) -> Bool {
+        NodeVersion.parse(resolved ?? "").map(isDefault) ?? false
+    }
+
+    private func persistFolders() {
+        let defaults = UserDefaults.standard
+        defaults.set(projectFolders.map(\.path), forKey: "projectFolders")
+        defaults.set(hiddenFolders.map(\.path), forKey: "hiddenProjectFolders")
     }
 
     public func distMeta(for version: NodeVersion) -> DistEntry? {
