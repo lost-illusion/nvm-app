@@ -185,7 +185,8 @@ struct VersionTable: View {
                         Image(systemName: "terminal")
                     }
                     .buttonStyle(.borderless)
-                    .help("Open Terminal with \(entry.version.raw)")
+                    .help("Open Terminal with \(entry.version.raw) — new tab if Terminal "
+                          + "is already open, new window otherwise")
                     Button { onUninstall(entry.version.raw) } label: {
                         Image(systemName: "trash")
                     }

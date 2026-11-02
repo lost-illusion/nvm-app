@@ -93,7 +93,8 @@ struct FoldersView: View {
                     Image(systemName: "terminal")
                 }
                 .buttonStyle(.borderless)
-                .help("Open Terminal in \(folder.lastPathComponent) with \(resolved)")
+                .help("Open Terminal in \(folder.lastPathComponent) with \(resolved) — "
+                      + "new tab if Terminal is already open, new window otherwise")
             }
             Button { onEdit(folder) } label: { Image(systemName: "square.and.pencil") }
                 .buttonStyle(.borderless)

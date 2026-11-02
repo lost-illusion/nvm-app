@@ -53,6 +53,19 @@ struct SettingsView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
 
+                Section("Terminal button") {
+                    Text("The terminal icon on installed versions and pinned folders opens "
+                         + "a shell with that version active: a new tab in Terminal's front "
+                         + "window when Terminal is already open, a new window when it isn't. "
+                         + "Folder buttons cd into the folder first.")
+                        .font(.callout)
+                    Text("First use asks for Automation permission (System Settings → "
+                         + "Privacy & Security → Automation → Node Versions → Terminal). "
+                         + "Reset the prompt with: tccutil reset AppleEvents com.illusion.nvm-app")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+
                 Section("Version data") {
                     LabeledContent("nvm", value: model.nvmVersionLabel ?? "—")
                     LabeledContent("NVM_DIR", value: model.layout.nvmDir.path)
