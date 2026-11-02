@@ -1,21 +1,37 @@
 # nvm-app
 
+![CI](https://github.com/lost-illusion/nvm-app/actions/workflows/ci.yml/badge.svg)
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+
 Native Swift (SwiftUI, SwiftPM) GUI for [nvm-sh](https://github.com/nvm-sh/nvm) on macOS:
-see installed Node versions at a glance, browse the remote catalog, install with package
-migration, set the new-shell default, manage aliases visually.
+browse the version catalog with release dates / npm / LTS codenames, install with package
+migration, set the new-shell default, watch `.nvmrc` project folders, open Terminals on a
+chosen version, install the zsh auto-use hook, and get setup health checks.
 
 Capability reference and design rationale: [`docs/nvm-capabilities.md`](docs/nvm-capabilities.md).
 
-## Run
+## Install
+
+Grab `nvm-app-<version>.dmg` from the [latest release](../../releases/latest), open it,
+drag **nvm-app** to **Applications**. The build is unsigned — first launch: right-click →
+Open → Open. Requires an nvm-sh install (`~/.nvm/nvm.sh`).
+
+## Build from source
+
+Requires Swift 6 / Xcode 26 (macOS 26 deployment target).
 
 ```sh
 swift build          # NVMCore library + NVMApp executable
-swift test           # core parser tests
+swift test           # core suites
 swift run NVMApp     # opens the window
+
+sh Tools/make-app-bundle.sh   # build/NVMApp.app (Dock-ready)
+sh Tools/make-dmg.sh          # build/nvm-app-<version>.dmg
 ```
 
-Requires an nvm-sh install (`~/.nvm/nvm.sh`; Homebrew copies unsupported). Override the
-directory with `defaults write nvm-app nvmDirOverride -string 'path/to/nvm'` (or set `XDG_CONFIG_HOME`).
+The app needs an nvm-sh install (Homebrew copies are flagged by the Health checks). Override
+the directory with `defaults write com.illusion.nvm-app nvmDirOverride -string 'path/to/nvm'`
+(or set `XDG_CONFIG_HOME`).
 
 ## How it talks to nvm
 
