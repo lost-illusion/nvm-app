@@ -61,6 +61,12 @@ public final class NVMModel {
     /// Versions released after the app launched get a "new" badge.
     public let launchedAt = Date()
 
+    /// Node < v16 has no arm64 macOS binaries — flag those rows/installs.
+    public let isAppleSilicon = AppleSiliconGuard.isAppleSilicon()
+    public func needsRosetta(_ version: NodeVersion) -> Bool {
+        AppleSiliconGuard.needsRosetta(major: version.major, appleSilicon: isAppleSilicon)
+    }
+
     /// Refresh the dist cache when it is older than this (background, non-blocking).
     public static let maxCacheAge: TimeInterval = 24 * 3600
 

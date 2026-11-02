@@ -15,6 +15,7 @@ struct VersionTable: View {
     @State private var expandedMinors: Set<String> = []
     @State private var sortKey: SortKey = .version
     @State private var sortDescending = true
+    @State private var pendingRosetta: InstallTarget?
 
     // Shared column widths so header, major/minor labels and patch rows align.
     // Sized so header + one dense badge row fit a ~800 pt window; wider Status
@@ -55,6 +56,22 @@ struct VersionTable: View {
             }
         }
         .overlay { emptyOverlay }
+        .confirmationDialog(
+            pendingRosetta.map {
+                "\($0.raw) is below v16 — no arm64 macOS binaries. nvm will run it under "
+                + "Rosetta 2, or build from source (slow, needs Xcode tools)."
+            } ?? "",
+            isPresented: .init(
+                get: { pendingRosetta != nil },
+                set: { if !$0 { pendingRosetta = nil } }),
+            titleVisibility: .visible)
+        {
+            Button("Install anyway") {
+                if let target = pendingRosetta { Task { await model.install(raw: target.raw) } }
+                pendingRosetta = nil
+            }
+            Button("Cancel", role: .cancel) { pendingRosetta = nil }
+        }
     }
 
     // MARK: - data
@@ -158,6 +175,7 @@ struct VersionTable: View {
                     VersionBadge(text: "LTS \(codename)", color: .orange)
                 }
                 if meta?.security == true { VersionBadge(text: "security", color: .red) }
+                if model.needsRosetta(entry.version) { VersionBadge(text: "rosetta", color: .orange) }
                 ForEach(entry.aliasedBy, id: \.self) { name in
                     VersionBadge(text: name, color: .purple)
                 }
@@ -196,7 +214,13 @@ struct VersionTable: View {
                 }
                 .frame(width: Self.colActions)
             } else {
-                Button { Task { await model.install(raw: entry.version.raw) } } label: {
+                Button {
+                    if model.needsRosetta(entry.version) {
+                        pendingRosetta = InstallTarget(raw: entry.version.raw)
+                    } else {
+                        Task { await model.install(raw: entry.version.raw) }
+                    }
+                } label: {
                     Image(systemName: "arrow.down.circle")
                 }
                 .buttonStyle(.borderless)
@@ -244,6 +268,9 @@ struct VersionTable: View {
             .frame(width: Self.colVersion, alignment: .leading)
             HStack(spacing: 6) {
                 if let codename = majorLTS(major) { VersionBadge(text: "LTS \(codename)", color: .orange) }
+                if model.isAppleSilicon, major.major < AppleSiliconGuard.firstArm64NodeMajor {
+                    VersionBadge(text: "rosetta", color: .orange)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             tableCell("\(major.totalCount) versions", width: Self.colVersions)

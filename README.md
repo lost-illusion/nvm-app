@@ -68,4 +68,5 @@ and the table still works offline with cached data. Download requests gzip
    pinned folder rows; new tab if Terminal is open, new window otherwise
 4. ~~Health checks~~ — done: `~/.npmrc prefix=` conflict, `~/.nvm` ownership walk,
    Homebrew-nvm detection (Settings → Health + Home issue badge)
-5. Apple Silicon guard: warn that node < v16 needs Rosetta/source builds
+5. ~~Apple Silicon guard~~ — done: "rosetta" badge on pre-v16 rows, install
+   confirmation dialog, warning inside the install sheet (`hw.optional.arm64` sysctl)

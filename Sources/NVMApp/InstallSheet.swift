@@ -15,6 +15,12 @@ struct InstallSheet: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Install \(version)").font(.title2.bold())
 
+            if let parsed = NodeVersion.parse(version), model.needsRosetta(parsed) {
+                Label("Below v16: no arm64 macOS binaries — nvm will use Rosetta 2 or a source build.",
+                      systemImage: "cpu")
+                    .font(.callout).foregroundStyle(.orange)
+            }
+
             Toggle("Offline (cached download only, no network)", isOn: $offline)
 
             Picker("Migrate global packages from", selection: $migrateFrom) {
