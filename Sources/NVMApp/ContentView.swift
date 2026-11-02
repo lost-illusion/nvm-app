@@ -141,6 +141,16 @@ struct ContentView: View {
 
             Spacer()
 
+            if !healthProblems.isEmpty {
+                Button { page = .settings } label: {
+                    Label("\(healthProblems.count) setup issue\(healthProblems.count == 1 ? "" : "s")",
+                          systemImage: "exclamationmark.triangle.fill")
+                }
+                .controlSize(.small)
+                .tint(.orange)
+                .help("Open Settings → Health for details and fixes")
+            }
+
             Button {
                 Task {
                     await withTaskGroup(of: Void.self) { group in
@@ -148,6 +158,7 @@ struct ContentView: View {
                         group.addTask { await model.refreshDist() }
                     }
                     await model.refreshExtras()
+                    await model.refreshHealth()
                 }
             } label: {
                 Label("Update versions", systemImage: "arrow.clockwise")
@@ -183,6 +194,10 @@ struct ContentView: View {
             .padding(.vertical, 6)
         }
         .background(.bar)
+    }
+
+    private var healthProblems: [HealthCheck] {
+        model.healthChecks.filter { $0.severity != .ok }
     }
 
     private var activeBusy: BusyAction? {

@@ -28,6 +28,7 @@ struct NVMAppRoot: App {
                                 group.addTask { await model.prepareDistAtLaunch() }
                             }
                             await model.refreshExtras()
+                            await model.refreshHealth()
                             await model.refreshAllPins()  // no-op unless folders are watched
                         }
                     }

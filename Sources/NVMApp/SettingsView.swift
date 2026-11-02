@@ -66,6 +66,28 @@ struct SettingsView: View {
                         .textSelection(.enabled)
                 }
 
+                Section("Health") {
+                    if problems.isEmpty {
+                        Label("No setup problems found", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    }
+                    ForEach(problems) { check in
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: check.severity == .error
+                                  ? "exclamationmark.octagon.fill" : "exclamationmark.triangle.fill")
+                                .foregroundStyle(check.severity == .error ? Color.red : Color.orange)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(check.title).font(.callout.weight(.semibold))
+                                Text(check.detail).font(.caption).foregroundStyle(.secondary)
+                                if let fix = check.fix {
+                                    Text(fix).font(.caption.monospaced()).textSelection(.enabled)
+                                }
+                            }
+                        }
+                    }
+                    Button("Re-run checks") { Task { await model.refreshHealth() } }
+                }
+
                 Section("Version data") {
                     LabeledContent("nvm", value: model.nvmVersionLabel ?? "—")
                     LabeledContent("NVM_DIR", value: model.layout.nvmDir.path)
@@ -77,6 +99,10 @@ struct SettingsView: View {
         }
         .frame(maxWidth: 620, alignment: .leading)
         .padding(.leading, 16)
+    }
+
+    private var problems: [HealthCheck] {
+        model.healthChecks.filter { $0.severity != .ok }
     }
 
     private var hookStatusLine: String {

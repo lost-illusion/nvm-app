@@ -302,6 +302,17 @@ public final class NVMModel {
         defaults.set(hiddenFolders.map(\.path), forKey: "hiddenProjectFolders")
     }
 
+    /// Setup problems (npm prefix override, ~/.nvm ownership, Homebrew-nvm).
+    public private(set) var healthChecks: [HealthCheck] = []
+
+    public func refreshHealth() async {
+        let layout = self.layout
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        healthChecks = await Task.detached(priority: .userInitiated) {
+            HealthChecker.run(nvmDir: layout.nvmDir, home: home)
+        }.value
+    }
+
     // MARK: - terminal auto-use hook (~/.zshrc chpwd)
 
     public private(set) var hookStatus: AutoUseHook.Status = .absent

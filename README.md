@@ -46,6 +46,7 @@ shell's PATH. The real levers this app provides:
   `DistMetadata` (nodejs.org `index.json` fetch + gzip inflate + on-disk cache),
   `Nvmrc` + `NvmrcScanner` (pins + bounded tree scan), `AutoUseHook` (marker-delimited
   zsh `chpwd` block in `~/.zshrc`), `TerminalLauncher` (Terminal.app automation),
+  `HealthChecker` (npm prefix / ownership / Homebrew-nvm checks),
   `NodeVersion`, `NVMModel` (observable state)
 - `Sources/NVMApp` — SwiftUI: Home (banner + filters + Full/Compact table), install sheet, setup view
 - `Tests/NVMCoreTests` — swift-testing suites for parsing, tree grouping, dist decoding + cache
@@ -65,5 +66,6 @@ and the table still works offline with cached data. Download requests gzip
    optional auto-install-missing toggle)
 3. ~~"Run in Terminal with this version"~~ — done: terminal icon on installed rows and
    pinned folder rows; new tab if Terminal is open, new window otherwise
-4. Health checks: `~/.npmrc prefix=` incompatibility, `~/.nvm` ownership, Homebrew-nvm warning
+4. ~~Health checks~~ — done: `~/.npmrc prefix=` conflict, `~/.nvm` ownership walk,
+   Homebrew-nvm detection (Settings → Health + Home issue badge)
 5. Apple Silicon guard: warn that node < v16 needs Rosetta/source builds
