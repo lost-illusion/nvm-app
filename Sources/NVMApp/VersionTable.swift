@@ -22,7 +22,8 @@ struct VersionTable: View {
     private static let colReleased: CGFloat = 90
     private static let colAge: CGFloat = 110
     private static let colNpm: CGFloat = 110
-    private static let colDisk: CGFloat = 190
+    private static let colDisk: CGFloat = 60
+    private static let colInstalled: CGFloat = 100  // compact-only column
     private static let colActions: CGFloat = 34
 
     var body: some View {
@@ -116,7 +117,7 @@ struct VersionTable: View {
                 Text("Versions").frame(width: Self.colVersions, alignment: .trailing)
                 Text("Last release").frame(width: Self.colReleased, alignment: .trailing)
                 Text("npm range").frame(width: Self.colNpm, alignment: .trailing)
-                Text("Installed").frame(width: Self.colDisk, alignment: .trailing)
+                Text("Installed").frame(width: Self.colInstalled, alignment: .trailing)
             }
         }
         .font(.caption.weight(.semibold))
@@ -161,6 +162,7 @@ struct VersionTable: View {
                 if model.isInstalled(entry.version) {
                     VersionBadge(text: "installed", color: .blue)
                     if model.isDefault(entry.version) { VersionBadge(text: "default") }
+                    if let extras { VersionBadge(text: "\(extras.globals) pkg", color: .secondary) }
                 }
                 if model.isNewSinceLaunch(entry.version) { VersionBadge(text: "new", color: .green) }
             }
@@ -170,10 +172,8 @@ struct VersionTable: View {
             tableCell(meta?.releaseDate.map { $0.formatted(.relative(presentation: .named)) } ?? "—",
                       width: Self.colAge)
             tableCell(meta?.npm ?? "—", width: Self.colNpm)
-            tableCell(extras.map {
-                ByteCountFormatter.string(fromByteCount: $0.sizeBytes, countStyle: .file)
-                    + " · \($0.globals) global\($0.globals == 1 ? "" : "s")"
-            } ?? "", width: Self.colDisk)
+            tableCell(extras.map { ByteCountFormatter.string(fromByteCount: $0.sizeBytes, countStyle: .file) } ?? "",
+                      width: Self.colDisk)
             if model.isInstalled(entry.version) {
                 Button { onUninstall(entry.version.raw) } label: {
                     Image(systemName: "trash")
@@ -241,7 +241,7 @@ struct VersionTable: View {
                 let installed = installedCount(in: major)
                 if installed > 0 { VersionBadge(text: "\(installed) installed", color: .blue) }
             }
-            .frame(width: Self.colDisk, alignment: .trailing)
+            .frame(width: Self.colInstalled, alignment: .trailing)
         }
     }
 
@@ -260,7 +260,7 @@ struct VersionTable: View {
             tableCell(lastRelease(in: minor).map { $0.formatted(.dateTime.month(.abbreviated).year()) } ?? "—",
                       width: Self.colReleased)
             tableCell("", width: Self.colNpm)
-            tableCell("", width: Self.colDisk)
+            tableCell("", width: Self.colInstalled)
         }
     }
 

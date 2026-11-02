@@ -2,45 +2,74 @@ import AppKit
 import NVMCore
 import SwiftUI
 
-/// Watch list of project folders and their `.nvmrc` pins. Hiding a folder only
-/// drops it from the watch list — the file is untouched and the folder returns
-/// via the Hidden menu.
-struct PinCard: View {
+/// Folders page: per-folder `.nvmrc` pins. Scan a directory (or the whole
+/// home/disk) to discover `.nvmrc` files, or point one folder without scanning.
+/// Hiding a folder only drops it from the watch list — the file is untouched
+/// and the folder returns via the Hidden menu.
+struct FoldersView: View {
     let model: NVMModel
     let onEdit: (URL) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 10) {
-                Label("Projects .nvmrc", systemImage: "folder")
+        VStack(alignment: .leading, spacing: 0) {
+            header
+            if let info = model.scanInfo {
+                Text(info)
                     .font(.caption).foregroundStyle(.secondary)
-                Button("Add folder…") { addFolder() }.controlSize(.small)
-                if !model.hiddenFolders.isEmpty {
-                    Menu("Hidden (\(model.hiddenFolders.count))") {
-                        ForEach(model.hiddenFolders, id: \.path) { url in
-                            Button("Show \(url.lastPathComponent)") {
-                                Task { await model.showHiddenFolder(url) }
-                            }
-                        }
-                    }
-                    .controlSize(.small)
-                }
-                Spacer()
+                    .padding(.horizontal, 14).padding(.top, 4)
             }
-
             if model.projectFolders.isEmpty {
-                Text("No watched folders — add a project folder to see its pin.")
-                    .font(.caption).foregroundStyle(.secondary)
+                ContentUnavailableView("No watched folders",
+                                       systemImage: "folder",
+                                       description: Text("Scan for .nvmrc files, or add a folder directly."))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ForEach(model.projectFolders, id: \.path) { folder in
-                    pinRow(folder)
+                List {
+                    ForEach(model.projectFolders, id: \.path) { folder in
+                        pinRow(folder)
+                    }
                 }
             }
         }
+    }
+
+    private var header: some View {
+        HStack(spacing: 8) {
+            Text("Project folders").font(.headline)
+            Button("Scan…") { pickAndScan() }.controlSize(.small)
+            Button("Scan home") {
+                Task { await model.scanForPins(under: FileManager.default.homeDirectoryForCurrentUser, label: "home") }
+            }
+            .controlSize(.small)
+            .help("Recursive search under ~/ — skips node_modules, Library, caches")
+            Button("Scan disk") {
+                Task { await model.scanForPins(under: URL(fileURLWithPath: "/"), label: "whole disk") }
+            }
+            .controlSize(.small)
+            .help("Whole-disk search — system trees are skipped, ~90 s budget, max 300 hits")
+            Button("Add folder…") { addFolder() }.controlSize(.small).help("Watch one folder without scanning")
+            if !model.hiddenFolders.isEmpty {
+                Menu("Hidden (\(model.hiddenFolders.count))") {
+                    ForEach(model.hiddenFolders, id: \.path) { url in
+                        Button("Show \(url.lastPathComponent)") {
+                            Task { await model.showHiddenFolder(url) }
+                        }
+                    }
+                }
+                .controlSize(.small)
+            }
+            Spacer()
+            switch model.scanBusy {
+            case .busy(let label): ProgressView(label).controlSize(.small)
+            case .failed(let message):
+                Label(message, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.red)
+            case .idle: EmptyView()
+            }
+        }
         .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .background(.quaternary.opacity(0.30), in: RoundedRectangle(cornerRadius: 10))
-        .padding(.horizontal, 12)
+        .padding(.top, 12)
+        .padding(.bottom, 6)
+        .disabled(model.scanBusy != .idle)
     }
 
     private func pinRow(_ folder: URL) -> some View {
@@ -107,6 +136,18 @@ struct PinCard: View {
                     }
                 }
             }
+        }
+    }
+
+    private func pickAndScan() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Scan"
+        panel.message = "Pick a directory to search for .nvmrc files"
+        if panel.runModal() == .OK, let url = panel.url {
+            Task { await model.scanForPins(under: url, label: url.lastPathComponent) }
         }
     }
 

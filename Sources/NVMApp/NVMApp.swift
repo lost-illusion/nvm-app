@@ -6,6 +6,7 @@ import SwiftUI
 struct NVMAppRoot: App {
     @State private var model = NVMModel(layout: NVMLayout.detect(
         override: UserDefaults.standard.string(forKey: "nvmDirOverride")))
+    @AppStorage("appearance") private var appearance = "system"
 
     var body: some Scene {
         WindowGroup("Node Versions") {
@@ -15,6 +16,7 @@ struct NVMAppRoot: App {
                 .onAppear {
                     // SwiftPM executables can start without frontmost focus.
                     if !NSApp.isActive { NSApp.activate(ignoringOtherApps: true) }
+                    applyAppearance(appearance)
                     // "Update versions" runs at launch: disk state first, then the
                     // remote catalog and the cached dist metadata in parallel.
                     Task {

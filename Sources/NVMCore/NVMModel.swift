@@ -55,6 +55,8 @@ public final class NVMModel {
     public private(set) var projectFolders: [URL] = []
     public private(set) var hiddenFolders: [URL] = []
     public private(set) var pinStates: [String: PinState] = [:]  // keyed by folder path
+    public private(set) var scanBusy: BusyAction = .idle
+    public private(set) var scanInfo: String?
 
     /// Versions released after the app launched get a "new" badge.
     public let launchedAt = Date()
@@ -201,11 +203,39 @@ public final class NVMModel {
         persistFolders()
     }
 
+    /// Walks `dir` for `.nvmrc` files and watches every hit (hidden folders
+    /// stay hidden — a hide outranks a rediscovery).
+    public func scanForPins(under dir: URL, label: String) async {
+        scanBusy = .busy("Scanning \(label) for .nvmrc…")
+        let found = await Task.detached(priority: .userInitiated) {
+            NvmrcScanner.scan(under: dir)
+        }.value
+        var added = 0
+        for folder in found {
+            guard !projectFolders.contains(where: { $0.path == folder.path }),
+                  !hiddenFolders.contains(where: { $0.path == folder.path }) else { continue }
+            projectFolders.append(folder)
+            added += 1
+        }
+        persistFolders()
+        scanInfo = "Found \(found.count) .nvmrc under \(dir.path) — \(added) newly watched"
+        scanBusy = .idle
+        await refreshAllPins()
+    }
+
+    /// Pins resolve through zsh, so refresh in bounded chunks rather than
+    /// spawning one shell per watched folder after a big scan.
     public func refreshAllPins() async {
-        await withTaskGroup(of: Void.self) { group in
-            for folder in projectFolders {
-                group.addTask { await self.refreshPin(for: folder) }
+        let folders = projectFolders
+        var start = 0
+        while start < folders.count {
+            let end = min(start + 6, folders.count)
+            await withTaskGroup(of: Void.self) { group in
+                for folder in folders[start..<end] {
+                    group.addTask { await self.refreshPin(for: folder) }
+                }
             }
+            start = end
         }
     }
 

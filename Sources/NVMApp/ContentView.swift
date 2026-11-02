@@ -24,8 +24,15 @@ struct FolderTarget: Identifiable, Hashable {
     var id: String { url.path }
 }
 
+enum Page: String, CaseIterable {
+    case home = "Home"
+    case folders = "Folders"
+    case settings = "Settings"
+}
+
 struct ContentView: View {
     @Environment(NVMModel.self) private var model
+    @State private var page: Page = .home
     @State private var filter: VersionFilter = .all
     @State private var tableStyle: TableStyle = .full
     @State private var installingTarget: InstallTarget?
@@ -33,16 +40,27 @@ struct ContentView: View {
     @State private var pinTarget: FolderTarget?
 
     var body: some View {
-        Group {
-            switch model.status {
-            case .checking:
-                ProgressView("Looking for nvm…")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            case .notInstalled:
-                SetupView()
-            case .ready:
-                home
+        HStack(spacing: 0) {
+            iconRail
+            Group {
+                switch model.status {
+                case .checking:
+                    ProgressView("Looking for nvm…")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                case .notInstalled:
+                    SetupView()
+                case .ready:
+                    switch page {
+                    case .home:
+                        home
+                    case .folders:
+                        FoldersView(model: model, onEdit: { pinTarget = FolderTarget(url: $0) })
+                    case .settings:
+                        SettingsView(model: model)
+                    }
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { statusBar }
         .sheet(item: $installingTarget) { target in
@@ -70,13 +88,39 @@ struct ContentView: View {
     private var home: some View {
         VStack(spacing: 0) {
             BannerCard(model: model)
-            PinCard(model: model, onEdit: { pinTarget = FolderTarget(url: $0) })
             controls
             Divider()
             VersionTable(model: model, filter: filter, style: tableStyle,
                          onInstallWithOptions: { installingTarget = InstallTarget(raw: $0) },
                          onUninstall: { pendingUninstall = $0 })
         }
+    }
+
+    // MARK: - icon rail
+
+    private var iconRail: some View {
+        VStack(spacing: 6) {
+            iconButton(.home, symbol: "house")
+            iconButton(.folders, symbol: "folder")
+            Spacer()
+            iconButton(.settings, symbol: "gearshape")
+        }
+        .padding(.vertical, 10)
+        .frame(width: 54)
+        .background(.bar)
+    }
+
+    private func iconButton(_ target: Page, symbol: String) -> some View {
+        Button { page = target } label: {
+            Image(systemName: symbol)
+                .font(.system(size: 16))
+                .frame(width: 36, height: 30)
+                .background(page == target ? Color.accentColor.opacity(0.18) : Color.clear,
+                            in: RoundedRectangle(cornerRadius: 7))
+                .foregroundStyle(page == target ? Color.accentColor : Color.secondary)
+        }
+        .buttonStyle(.plain)
+        .help(target.rawValue)
     }
 
     private var controls: some View {
@@ -177,6 +221,8 @@ struct VersionBadge: View {
     var body: some View {
         Text(text)
             .font(.caption.weight(.semibold))
+            // fixedSize: never wrap to a second line inside a table row
+            .fixedSize()
             .padding(.horizontal, 6).padding(.vertical, 2)
             .background(color.opacity(0.15), in: Capsule())
             .foregroundStyle(color)

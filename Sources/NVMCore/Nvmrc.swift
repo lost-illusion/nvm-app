@@ -25,3 +25,45 @@ public enum Nvmrc {
         try? FileManager.default.removeItem(at: folder.appendingPathComponent(fileName))
     }
 }
+
+/// Recursive `.nvmrc` discovery. Noise and system trees are skipped so even a
+/// whole-disk scan stays bounded; unreadable corners are silently ignored.
+public enum NvmrcScanner {
+    public struct Limits: Sendable {
+        public var maxResults = 300
+        public var timeBudget: TimeInterval = 90
+        public init() {}
+    }
+
+    private static let excluded: Set<String> = [
+        // dev noise
+        "node_modules", ".git", ".svn", ".hg", "vendor", ".cache", ".npm", ".gradle", ".m2",
+        // macOS trees where .nvmrc realistically never lives
+        "System", "usr", "bin", "sbin", "lib", "opt", "dev", "private", "var",
+        "Volumes", "Network", "Applications", "Library", ".Trash", ".Spotlight-V100",
+        ".DocumentRevisions-V100", ".fseventsd", ".vol", ".Timetracking",
+    ]
+
+    public static func scan(under root: URL,
+                            limits: Limits = Limits(),
+                            fileManager: FileManager = .default) -> [URL] {
+        var found: [URL] = []
+        let deadline = Date().addingTimeInterval(limits.timeBudget)
+        guard let enumerator = fileManager.enumerator(at: root, includingPropertiesForKeys: nil) else {
+            return found
+        }
+        for case let url as URL in enumerator {
+            let name = url.lastPathComponent
+            if name == Nvmrc.fileName {
+                // Enumerators return symlink-resolved paths (/var → /private/var);
+                // resolve our own paths too so watch-list dedup matches them.
+                found.append(url.deletingLastPathComponent().resolvingSymlinksInPath())
+                if found.count >= limits.maxResults { break }
+            } else if excluded.contains(name) {
+                enumerator.skipDescendants()
+            }
+            if Date() > deadline { break }
+        }
+        return found
+    }
+}
