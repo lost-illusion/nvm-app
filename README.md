@@ -10,6 +10,18 @@ chosen version, install the zsh auto-use hook, and get setup health checks.
 
 Capability reference and design rationale: [`docs/nvm-capabilities.md`](docs/nvm-capabilities.md).
 
+## Screenshots
+
+| Home — Full table | Home — Compact majors | Project folders |
+|---|---|---|
+| ![Home, full table](docs/screenshots/home-full.png) | ![Home, compact majors](docs/screenshots/home-compact.png) | ![Project folders](docs/screenshots/folders.png) |
+
+Full mode lists every patch release with release date, age, bundled npm, on-disk size and
+globals. Compact mode folds majors (version count, last release, npm range, installed count)
+and expands majors → minors → patches on click. The folders page watches `.nvmrc` pins:
+scan home/disk/any folder, edit or remove pins, open a Terminal in the folder on its pinned
+version, hide-not-remove a watch.
+
 ## Install
 
 Grab `nvm-app-<version>.dmg` from the [latest release](../../releases/latest), open it,

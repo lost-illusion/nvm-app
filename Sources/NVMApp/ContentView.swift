@@ -32,9 +32,10 @@ enum Page: String, CaseIterable {
 
 struct ContentView: View {
     @Environment(NVMModel.self) private var model
-    @State private var page: Page = .home
-    @State private var filter: VersionFilter = .all
-    @State private var tableStyle: TableStyle = .full
+    // View choices persist across launches.
+    @AppStorage("page") private var page: Page = .home
+    @AppStorage("versionFilter") private var filter: VersionFilter = .all
+    @AppStorage("tableStyle") private var tableStyle: TableStyle = .full
     @State private var installingTarget: InstallTarget?
     @State private var pendingUninstall: String?
     @State private var pinTarget: FolderTarget?
