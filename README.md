@@ -34,14 +34,18 @@ shell's PATH. The real levers this app provides:
 
 - **Set default** → `nvm alias default <v>` (applies to every new shell)
 - **Install** → `nvm install` with `--offline` / `--reinstall-packages-from=` options
-- **Per project** → write a `.nvmrc` (roadmap)
-- **Existing shell** → right-click *Copy `nvm use` command* and paste
+- **Per project** → write a `.nvmrc`, watch folders, scan for pins
+- **New shell** → terminal icon opens Terminal (tab if open) with the version active;
+  folder rows `cd` there first — or install the zsh `chpwd` auto-use hook in Settings
+- **Existing shell** → `nvm use <v>` yourself; the app cannot reach live shells
 
 ## Layout
 
 - `Sources/NVMCore` — `NVMLayout` (disk state + installed extras: globals, size, install date),
   `NVMShellRunner` (zsh bridge), `RemoteCatalogParser` (`ls-remote` parsing),
   `DistMetadata` (nodejs.org `index.json` fetch + gzip inflate + on-disk cache),
+  `Nvmrc` + `NvmrcScanner` (pins + bounded tree scan), `AutoUseHook` (marker-delimited
+  zsh `chpwd` block in `~/.zshrc`), `TerminalLauncher` (Terminal.app automation),
   `NodeVersion`, `NVMModel` (observable state)
 - `Sources/NVMApp` — SwiftUI: Home (banner + filters + Full/Compact table), install sheet, setup view
 - `Tests/NVMCoreTests` — swift-testing suites for parsing, tree grouping, dist decoding + cache
@@ -56,7 +60,10 @@ and the table still works offline with cached data. Download requests gzip
 1. ~~`.nvmrc` awareness~~ — done: PinCard under the banner (choose folder, see the
    pin → `nvm version` / `version-remote` resolution, install/set-default, edit
    or remove the file; right-click any table row to pin it)
-2. Shell integration helper: install the zsh `chpwd` auto-use hook (README recipe in nvm)
-3. "Run in Terminal with this version" button (PATH-prefixed launch)
+2. ~~Shell integration helper~~ — done: Settings installs the zsh `chpwd` auto-use hook
+   as a marker-delimited `~/.zshrc` block (one-time backup, foreign-hook detection,
+   optional auto-install-missing toggle)
+3. ~~"Run in Terminal with this version"~~ — done: terminal icon on installed rows and
+   pinned folder rows; new tab if Terminal is open, new window otherwise
 4. Health checks: `~/.npmrc prefix=` incompatibility, `~/.nvm` ownership, Homebrew-nvm warning
 5. Apple Silicon guard: warn that node < v16 needs Rosetta/source builds

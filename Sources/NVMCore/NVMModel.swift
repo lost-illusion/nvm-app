@@ -450,4 +450,19 @@ public final class NVMModel {
     /// Copy-pasteable command the user can run in their own terminal to switch
     /// an existing shell — the GUI cannot reach other shells (capabilities doc §13.3).
     public func useCommand(for raw: String) -> String { "nvm use \(raw)" }
+
+    /// Opens a NEW Terminal window with the interactive shell already switched
+    /// to this version (Terminal.app `do script`, see TerminalLauncher).
+    public func runInTerminal(_ raw: String) {
+        if let message = TerminalLauncher.openTerminal(using: raw, nvmDir: layout.nvmDir) {
+            actionBusy = .failed(message)
+        }
+    }
+
+    /// Terminal opened *inside* a watched folder, switched to its pinned version.
+    public func openFolderInTerminal(_ folder: URL, spec: String) {
+        if let message = TerminalLauncher.openTerminal(using: spec, nvmDir: layout.nvmDir, cd: folder) {
+            actionBusy = .failed(message)
+        }
+    }
 }

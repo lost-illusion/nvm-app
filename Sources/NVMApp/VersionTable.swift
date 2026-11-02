@@ -17,14 +17,16 @@ struct VersionTable: View {
     @State private var sortDescending = true
 
     // Shared column widths so header, major/minor labels and patch rows align.
-    private static let colVersion: CGFloat = 175
+    // Sized so header + one dense badge row fit a ~800 pt window; wider Status
+    // overflow would clip the actions column off-screen.
+    private static let colVersion: CGFloat = 110
     private static let colVersions: CGFloat = 90
-    private static let colReleased: CGFloat = 90
-    private static let colAge: CGFloat = 110
-    private static let colNpm: CGFloat = 110
-    private static let colDisk: CGFloat = 60
-    private static let colInstalled: CGFloat = 100  // compact-only column
-    private static let colActions: CGFloat = 34
+    private static let colReleased: CGFloat = 72
+    private static let colAge: CGFloat = 78
+    private static let colNpm: CGFloat = 78  // fits compact "10.2.4–11.20.0"
+    private static let colDisk: CGFloat = 58
+    private static let colInstalled: CGFloat = 90  // compact-only column
+    private static let colActions: CGFloat = 68  // terminal + trash on installed rows
 
     var body: some View {
         List {
@@ -101,7 +103,7 @@ struct VersionTable: View {
 
     @ViewBuilder
     private var headerRow: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 8) {
             switch style {
             case .full:
                 sortButton("Version", .version).frame(width: Self.colVersion, alignment: .leading)
@@ -145,7 +147,7 @@ struct VersionTable: View {
     private func versionRow(_ entry: RemoteVersion, indent: CGFloat) -> some View {
         let meta = model.distMeta(for: entry.version)
         let extras = model.extras(for: entry.version)
-        return HStack(spacing: 12) {
+        return HStack(spacing: 8) {
             Text(entry.version.raw)
                 .font(.body.monospaced())
                 .padding(.leading, indent)
@@ -162,7 +164,10 @@ struct VersionTable: View {
                 if model.isInstalled(entry.version) {
                     VersionBadge(text: "installed", color: .blue)
                     if model.isDefault(entry.version) { VersionBadge(text: "default") }
-                    if let extras { VersionBadge(text: "\(extras.globals) pkg", color: .secondary) }
+                    // Only show a pkg badge when there actually are globals.
+                    if let extras, extras.globals > 0 {
+                        VersionBadge(text: "\(extras.globals) pkg", color: .secondary)
+                    }
                 }
                 if model.isNewSinceLaunch(entry.version) { VersionBadge(text: "new", color: .green) }
             }
@@ -175,12 +180,19 @@ struct VersionTable: View {
             tableCell(extras.map { ByteCountFormatter.string(fromByteCount: $0.sizeBytes, countStyle: .file) } ?? "",
                       width: Self.colDisk)
             if model.isInstalled(entry.version) {
-                Button { onUninstall(entry.version.raw) } label: {
-                    Image(systemName: "trash")
+                HStack(spacing: 6) {
+                    Button { model.runInTerminal(entry.version.raw) } label: {
+                        Image(systemName: "terminal")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Open Terminal with \(entry.version.raw)")
+                    Button { onUninstall(entry.version.raw) } label: {
+                        Image(systemName: "trash")
+                    }
+                    .buttonStyle(.borderless)
+                    .tint(.red)
+                    .help("Uninstall \(entry.version.raw)")
                 }
-                .buttonStyle(.borderless)
-                .tint(.red)
-                .help("Uninstall \(entry.version.raw)")
                 .frame(width: Self.colActions)
             } else {
                 Button { Task { await model.install(raw: entry.version.raw) } } label: {
@@ -221,7 +233,7 @@ struct VersionTable: View {
     // MARK: - compact labels (column-aligned with header)
 
     private func majorLabel(_ major: VersionTree.Major) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 8) {
             HStack(spacing: 8) {
                 Image(systemName: expandedMajors.contains(major.major) ? "chevron.down" : "chevron.right")
                     .font(.caption).foregroundStyle(.secondary)
@@ -246,7 +258,7 @@ struct VersionTable: View {
     }
 
     private func minorLabel(_ minor: VersionTree.Minor) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 8) {
             HStack(spacing: 8) {
                 Image(systemName: expandedMinors.contains(minor.id) ? "chevron.down" : "chevron.right")
                     .font(.caption).foregroundStyle(.secondary)

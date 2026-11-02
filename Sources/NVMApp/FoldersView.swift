@@ -88,6 +88,13 @@ struct FoldersView: View {
 
             statusArea(folder, state)
 
+            if let resolved = state.resolved {
+                Button { model.openFolderInTerminal(folder, spec: resolved) } label: {
+                    Image(systemName: "terminal")
+                }
+                .buttonStyle(.borderless)
+                .help("Open Terminal in \(folder.lastPathComponent) with \(resolved)")
+            }
             Button { onEdit(folder) } label: { Image(systemName: "square.and.pencil") }
                 .buttonStyle(.borderless)
                 .help("Edit this project’s .nvmrc")
