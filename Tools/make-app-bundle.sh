@@ -5,7 +5,7 @@
 set -eu
 cd "$(dirname "$0")/.."
 
-VERSION="${NVM_APP_VERSION:-0.1.0}"
+VERSION="${NVM_APP_VERSION:-0.1.1}"
 if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
     echo "invalid NVM_APP_VERSION '$VERSION' — expect MAJOR.MINOR.PATCH" >&2
     exit 1

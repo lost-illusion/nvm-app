@@ -44,12 +44,39 @@ import Testing
 
     @Test func corruptedWhenOneMarkerIsMissing() {
         let installed = AutoUseHook.install(into: "# user\n", autoInstall: true)
-        let halfBroken = installed.replacingOccurrences(of: AutoUseHook.endMarker, with: "")
+        // Realistic loss: the end marker line is deleted, whole line gone.
+        let halfBroken = installed.replacingOccurrences(of: AutoUseHook.endMarker + "\n", with: "")
         #expect(AutoUseHook.status(in: halfBroken) == .corrupted)
-        // Remove on an orphaned begin marker drops the tail block but keeps
+        // Remove on an orphaned begin marker drops the recognized body but keeps
         // the user's preceding lines.
         let cleaned = AutoUseHook.remove(from: halfBroken)
         #expect(cleaned == "# user\n")
+    }
+
+    @Test func lostEndMarkerNeverTruncatesUserLines() {
+        // Regression: hook installed, user later appends their own lines AFTER
+        // the block, then the end marker line gets lost. Removal used to cut to
+        // EOF and ate the user's lines.
+        let installed = AutoUseHook.install(into: "# before\n", autoInstall: true)
+        let broken = (installed + "export PATHextra\nalias ll='ls -la'\n")
+            .replacingOccurrences(of: AutoUseHook.endMarker + "\n", with: "")
+        #expect(AutoUseHook.status(in: broken) == .corrupted)
+        let cleaned = AutoUseHook.remove(from: broken)
+        #expect(cleaned == "# before\nexport PATHextra\nalias ll='ls -la'\n")
+        #expect(AutoUseHook.status(in: cleaned) == .absent)
+    }
+
+    @Test func editedCorruptedBlockOnlyLosesItsMarkerLine() {
+        // Body edited past recognition: removal must not guess a range. It drops
+        // the orphan marker line and leaves the rest for the user (status now foreign).
+        let installed = AutoUseHook.install(into: "# before\n", autoInstall: true)
+        let edited = installed
+            .replacingOccurrences(of: AutoUseHook.endMarker + "\n", with: "")
+            .replacingOccurrences(of: "      nvm use", with: "      nvm use --lts")
+        #expect(AutoUseHook.status(in: edited) == .corrupted)
+        let cleaned = AutoUseHook.remove(from: edited)
+        #expect(!cleaned.contains(AutoUseHook.beginMarker))
+        #expect(cleaned.contains("nvm use --lts"))  // untouched — no silent truncation
     }
 
     @Test func statusPrefersOurMarkersOverForeignText() {

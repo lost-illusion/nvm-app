@@ -4,7 +4,7 @@
 # (or xattr -d com.apple.quarantine) until notarization is set up.
 set -eu
 cd "$(dirname "$0")/.."
-VERSION="${NVM_APP_VERSION:-0.1.0}"
+VERSION="${NVM_APP_VERSION:-0.1.1}"
 
 sh Tools/make-app-bundle.sh
 

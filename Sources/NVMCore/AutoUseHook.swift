@@ -2,7 +2,8 @@ import Foundation
 
 /// The zsh `chpwd` auto-use hook from nvm's README, written by the app as a
 /// marker-delimited block so install/remove is exact and never rewrites the
-/// user's own lines.
+/// user's own lines. Removal never reads past the block it recognizes, even
+/// when a marker has been lost.
 public enum AutoUseHook {
     public static let beginMarker = "# >>> nvm-app auto-use >>>"
     public static let endMarker = "# <<< nvm-app auto-use <<<"
@@ -32,37 +33,74 @@ public enum AutoUseHook {
     }
 
     public static func remove(from zshrc: String) -> String {
-        let begin = zshrc.range(of: beginMarker)
-        let end = zshrc.range(of: endMarker)
+        // 1. Exact inverse of install(): delete the known block verbatim
+        //    (either autoInstall variant). This cannot touch user lines.
         var result = zshrc
-        // install() prepends one newline before the begin marker; consume it (and
-        // one newline after the end marker) so removal restores the file exactly.
-        func consumingEdges(_ lower: String.Index, _ upper: String.Index) -> (String.Index, String.Index) {
-            var lo = lower
-            var hi = upper
-            if lo != result.startIndex, result[result.index(before: lo)] == "\n" { lo = result.index(before: lo) }
-            if hi != result.endIndex, result[hi] == "\n" { hi = result.index(after: hi) }
-            return (lo, hi)
+        for autoInstall in [true, false] {
+            let exact = "\n" + block(autoInstall: autoInstall)
+            while let r = result.range(of: exact) { result.removeSubrange(r) }
         }
-        if let begin, let end, begin.upperBound <= end.lowerBound {
-            let (lo, hi) = consumingEdges(begin.lowerBound, end.upperBound)
-            result.removeSubrange(lo..<hi)
-            return result
+        if AutoUseHook.status(in: result) != .corrupted { return result }
+
+        // 2. Corrupted: a marker survived but its pair is gone. Work line-wise
+        //    and never read past what we recognize as our block — losing a
+        //    marker must not truncate the user's own lines (issue: .zshrc got cut).
+        let lines = result.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
+        let trimmed = lines.map { $0.trimmingCharacters(in: .whitespaces) }
+        let beginIdx = trimmed.firstIndex(of: beginMarker)
+        let endIdx = trimmed.firstIndex(of: endMarker)
+
+        if let beginIdx, let endIdx, beginIdx < endIdx {
+            // Both markers, body edited between them: the markers still bound
+            // what is ours, so drop begin..end inclusive (and the blank line
+            // install prepended). Deleting the end marker line also drops its
+            // newline; anything the user wrote after stays untouched.
+            var lo = beginIdx
+            if lo > 0, lines[lo - 1].isEmpty { lo -= 1 }
+            var l = lines
+            l.removeSubrange(lo..<endIdx + 1)
+            return l.joined(separator: "\n")
         }
-        if let begin {
-            // Orphaned block: we only ever append at the end, so delete to EOF.
-            let (lo, _) = consumingEdges(begin.lowerBound, result.endIndex)
-            result.removeSubrange(lo..<result.endIndex)
-            return result
+        if let beginIdx {
+            // Orphan begin marker (end marker lost). Remove only a verbatim
+            // match of the known body right after it; never reach EOF blindly.
+            var matchedBody: [String]?
+            for autoInstall in [true, false] {
+                let body = Self.blockLines(autoInstall: autoInstall)
+                    .dropFirst()                    // begin marker
+                    .dropLast(2)                    // end marker + trailing newline
+                    .map { $0.trimmingCharacters(in: .whitespaces) }
+                guard beginIdx + body.count < lines.count else { continue }
+                if Array(trimmed[(beginIdx + 1)...(beginIdx + body.count)]) == body {
+                    matchedBody = body
+                    break
+                }
+            }
+            var l = lines
+            if let body = matchedBody {
+                // Consume the blank line install prepended; deleting the last
+                // body line also drops its newline — user lines after resume right there.
+                var lo = beginIdx
+                if lo > 0, l[lo - 1].isEmpty { lo -= 1 }
+                l.removeSubrange(lo..<beginIdx + 1 + body.count)
+            } else {
+                // Body edited past recognition: drop only the orphan marker
+                // line and hand the rest to the user (status becomes foreign).
+                l.remove(at: beginIdx)
+            }
+            return l.joined(separator: "\n")
         }
-        if end != nil {
+        if endIdx != nil {
             // Orphan end marker: drop just that line, keep everything else.
-            result = result.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
-                .filter { $0.trimmingCharacters(in: .whitespaces) != endMarker }
-                .joined(separator: "\n")
-            return result
+            return lines.enumerated().filter { $0.offset != endIdx }.map(\.element).joined(separator: "\n")
         }
         return result
+    }
+
+    private static func blockLines(autoInstall: Bool) -> [String] {
+        block(autoInstall: autoInstall)
+            .split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
+            .map(String.init)
     }
 
     public static func block(autoInstall: Bool) -> String {
